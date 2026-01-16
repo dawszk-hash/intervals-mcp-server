@@ -19,35 +19,22 @@ def start_server(mcp, transport: str) -> None:
     else:
         sse = SseServerTransport("/messages")
 
-        # Zmiana: Przyjmujemy scope, receive i send bezpośrednio (standard ASGI)
+        # Używamy bezpośredniego wywołania sse.handle_sse, 
+        # które jest już przygotowane jako aplikacja ASGI
         async def handle_sse(scope, receive, send):
-            try:
-                logger.info("Incoming SSE connection...")
-                # Przekazujemy surowe parametry do transportu MCP
-                async with sse.connect_sse(scope, receive, send) as (read_stream, write_stream):
-                    logger.info("SSE streams connected. Running MCP server loop...")
-                    await mcp.server.run(
-                        read_stream,
-                        write_stream,
-                        mcp.server.create_initialization_options()
-                    )
-            except Exception as e:
-                logger.error(f"CRITICAL ERROR in SSE handler: {str(e)}", exc_info=True)
-                raise
-
-        async def handle_messages(scope, receive, send):
-            try:
-                await sse.handle_post_message(scope, receive, send)
-            except Exception as e:
-                logger.error(f"Error in message handler: {str(e)}")
-                raise
+            async with sse.connect_sse(scope, receive, send) as (read_stream, write_stream):
+                await mcp.server.run(
+                    read_stream,
+                    write_stream,
+                    mcp.server.create_initialization_options()
+                )
 
         app = Starlette(
             debug=True,
             routes=[
-                # Używamy surowych funkcji zamiast dekoratora request
+                # Mountujemy endpointy jako surowe aplikacje ASGI
                 Route("/sse", endpoint=handle_sse),
-                Route("/messages", endpoint=handle_messages, methods=["POST"]),
+                Route("/messages", endpoint=sse.handle_post_message, methods=["POST"]),
             ]
         )
 
