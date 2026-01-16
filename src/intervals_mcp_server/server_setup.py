@@ -17,24 +17,34 @@ def start_server(mcp, transport: str) -> None:
         logger.info("Starting MCP server via STDIO...")
         mcp.run(transport="stdio")
     else:
+        # Inicjalizacja transportu SSE
         sse = SseServerTransport("/messages")
 
-        # Używamy bezpośredniego wywołania sse.handle_sse, 
-        # które jest już przygotowane jako aplikacja ASGI
         async def handle_sse(scope, receive, send):
-            async with sse.connect_sse(scope, receive, send) as (read_stream, write_stream):
-                await mcp.server.run(
-                    read_stream,
-                    write_stream,
-                    mcp.server.create_initialization_options()
-                )
+            """Surowy handler ASGI dla strumienia SSE."""
+            try:
+                async with sse.connect_sse(scope, receive, send) as (read_stream, write_stream):
+                    await mcp.server.run(
+                        read_stream,
+                        write_stream,
+                        mcp.server.create_initialization_options()
+                    )
+            except Exception as e:
+                logger.error(f"Error in SSE connection: {e}", exc_info=True)
 
+        async def handle_messages(scope, receive, send):
+            """Surowy handler ASGI dla przychodzących wiadomości POST."""
+            try:
+                await sse.handle_post_message(scope, receive, send)
+            except Exception as e:
+                logger.error(f"Error in message handler: {e}")
+
+        # Budowa aplikacji Starlette z surowymi endpointami ASGI
         app = Starlette(
             debug=True,
             routes=[
-                # Mountujemy endpointy jako surowe aplikacje ASGI
                 Route("/sse", endpoint=handle_sse),
-                Route("/messages", endpoint=sse.handle_post_message, methods=["POST"]),
+                Route("/messages", endpoint=handle_messages, methods=["POST"]),
             ]
         )
 
