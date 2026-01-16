@@ -5,8 +5,7 @@ import asyncio
 logger = logging.getLogger("intervals_icu_mcp_server")
 
 def get_transport() -> str:
-    transport = os.getenv("MCP_TRANSPORT", "stdio").lower()
-    return transport
+    return os.getenv("MCP_TRANSPORT", "sse").lower()
 
 def start_server(mcp, transport: str) -> None:
     if transport == "stdio":
@@ -21,12 +20,12 @@ def start_server(mcp, transport: str) -> None:
 
         port = int(os.getenv("UVICORN_PORT", "10000"))
         
-        # Tworzymy instancję transportu SSE
+        # Tworzymy transport SSE z jawnymi ścieżkami
         sse = SseServerTransport("/messages")
 
         async def handle_sse(request):
+            # To jest serce serwera - łączy ruch HTTP z logiką MCP
             async with sse.connect_sse(request.scope, request.receive, request.send) as (read_stream, write_stream):
-                # Tutaj łączymy transport z serwerem MCP
                 await mcp.server.run(
                     read_stream,
                     write_stream,
@@ -36,7 +35,7 @@ def start_server(mcp, transport: str) -> None:
         async def handle_messages(request):
             await sse.handle_post_message(request.scope, request.receive, request.send)
 
-        # Ręcznie budujemy aplikację Starlette, którą Uvicorn na pewno zrozumie
+        # Budujemy czystą aplikację Starlette. Uvicorn ją uwielbia.
         app = Starlette(
             routes=[
                 Route("/sse", endpoint=handle_sse),
@@ -44,7 +43,7 @@ def start_server(mcp, transport: str) -> None:
             ]
         )
 
-        logger.info(f"Manual SSE Dispatcher starting on port {port}")
+        logger.info(f"==> MANUAL DISPATCHER ACTIVE ON PORT {port} <==")
         uvicorn.run(app, host="0.0.0.0", port=port, log_level="info")
 
 def setup_transport() -> str:
