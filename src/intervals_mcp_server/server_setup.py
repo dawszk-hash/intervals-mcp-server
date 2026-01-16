@@ -10,25 +10,34 @@ def get_transport() -> str:
     return transport
 
 def start_server(mcp, transport: str) -> None:
-    """
-    Uruchamia serwer MCP. Dla SSE używamy wbudowanej metody mcp.run,
-    która sama zajmie się poprawnym wystawieniem aplikacji.
-    """
     if transport == "stdio":
         logger.info("Starting MCP server with STDIO transport...")
         mcp.run(transport="stdio")
 
     elif transport == "sse":
+        import uvicorn
+        from starlette.applications import Starlette
+
         host = os.getenv("UVICORN_HOST", "0.0.0.0")
         port = int(os.getenv("UVICORN_PORT", "10000"))
 
-        logger.info(f"Starting MCP server with SSE transport on {host}:{port}")
-        
-        # Wersja 1.25.0 najlepiej radzi sobie sama, gdy wywołamy run z transportem sse
-        mcp.run(
-            transport="sse",
+        logger.info(f"Starting MCP server via Uvicorn on {host}:{port}")
+
+        # Wersja 1.25.0: mcp.run() jest ograniczone, więc wyciągamy aplikację Starlette
+        # Próbujemy najpierw oficjalnej metody tworzenia aplikacji
+        try:
+            app = mcp.create_app()
+        except AttributeError:
+            # Jeśli create_app nie istnieje, używamy wewnętrznego atrybutu
+            app = getattr(mcp, "_app", mcp)
+
+        uvicorn.run(
+            app,
             host=host,
-            port=port
+            port=port,
+            log_level="info",
+            # Wyłączamy lifespan, jeśli biblioteka go nie wspiera (widoczne w logach)
+            lifespan="off"
         )
     else:
         raise ValueError(f"Unsupported transport: {transport}")
