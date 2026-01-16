@@ -21,10 +21,8 @@ def start_server(mcp, transport: str) -> None:
     else:
         sse = SseServerTransport("/messages")
 
-        # 1. Obsługa Lobe Chat (Streamable HTTP / Fetch)
         async def handle_lobe_manifest(request: Request):
-            """Lobe Chat szuka manifestu narzędzi przez POST na /"""
-            # Zwracamy listę narzędzi w formacie, którego oczekuje klient HTTP
+            """Obsługa Lobe Chat (Manifest narzędzi)"""
             return JSONResponse({
                 "mcpVersion": "1.0",
                 "capabilities": mcp.server.capabilities.dict(),
@@ -37,7 +35,6 @@ def start_server(mcp, transport: str) -> None:
                 ]
             })
 
-        # 2. Standardowy handler SSE (dla Claude/Gemini)
         async def handle_sse(request: Request):
             async with sse.connect_sse(
                 request.scope, 
@@ -51,18 +48,12 @@ def start_server(mcp, transport: str) -> None:
                 )
 
         async def handle_messages(request: Request):
-            await sse.handle_post_message(
-                request.scope, 
-                request.receive, 
-                request._send
-            )
+            await sse.handle_post_message(request.scope, request.receive, request._send)
 
         app = Starlette(
             debug=True,
             routes=[
-                # Endpoint dla Lobe Chat (obsługuje GET i POST na głównym adresie)
                 Route("/", endpoint=handle_lobe_manifest, methods=["GET", "POST"]),
-                # Endpointy dla standardowego SSE
                 Route("/sse", endpoint=handle_sse),
                 Route("/messages", endpoint=handle_messages, methods=["POST"]),
             ]
@@ -70,3 +61,7 @@ def start_server(mcp, transport: str) -> None:
 
         logger.info(f"==> BOOTING HYBRID SERVER (SSE + LOBE) ON PORT {port} <==")
         uvicorn.run(app, host="0.0.0.0", port=port, log_level="info")
+
+# Ta funkcja jest wymagana przez server.py
+def setup_transport() -> str:
+    return get_transport()
