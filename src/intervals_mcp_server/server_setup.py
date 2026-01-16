@@ -1,10 +1,8 @@
 import os
 import logging
 import uvicorn
-import asyncio
 from starlette.applications import Starlette
 from starlette.routing import Route
-from starlette.endpoints import HTTPEndpoint
 from mcp.server.sse import SseServerTransport
 
 logger = logging.getLogger("intervals_icu_mcp_server")
@@ -19,36 +17,33 @@ def start_server(mcp, transport: str) -> None:
         logger.info("Starting MCP server via STDIO...")
         mcp.run(transport="stdio")
     else:
+        # Inicjalizacja transportu MCP SSE
         sse = SseServerTransport("/messages")
 
-        # Używamy klas, aby Starlette wiedziało dokładnie jak obsłużyć ASGI
-        class SSEEndpoint(HTTPEndpoint):
-            async def get(self, request):
-                scope = request.scope
-                receive = request.receive
-                send = request.send
-                
+        # To jest surowa aplikacja ASGI - Starlette przekaże tu scope, receive i send bezpośrednio
+        async def handle_sse(scope, receive, send):
+            if scope["type"] == "http":
                 async with sse.connect_sse(scope, receive, send) as (read_stream, write_stream):
-                    logger.info("SSE Connection established.")
                     await mcp.server.run(
                         read_stream,
                         write_stream,
                         mcp.server.create_initialization_options()
                     )
 
-        class MessagesEndpoint(HTTPEndpoint):
-            async def post(self, request):
-                await sse.handle_post_message(request.scope, request.receive, request.send)
+        async def handle_messages(scope, receive, send):
+            if scope["type"] == "http":
+                await sse.handle_post_message(scope, receive, send)
 
+        # Kluczowa zmiana: nie używamy 'endpoint=', tylko przekazujemy funkcję ASGI bezpośrednio
         app = Starlette(
             debug=True,
             routes=[
-                Route("/sse", endpoint=SSEEndpoint),
-                Route("/messages", endpoint=MessagesEndpoint),
+                Route("/sse", handle_sse),
+                Route("/messages", handle_messages, methods=["POST"]),
             ]
         )
 
-        logger.info(f"==> BOOTING MANUAL DISPATCHER ON PORT {port} <==")
+        logger.info(f"==> BOOTING RAW ASGI DISPATCHER ON PORT {port} <==")
         uvicorn.run(app, host="0.0.0.0", port=port, log_level="info")
 
 def setup_transport() -> str:
