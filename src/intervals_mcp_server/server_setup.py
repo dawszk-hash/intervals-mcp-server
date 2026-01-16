@@ -10,27 +10,25 @@ def get_transport() -> str:
     return transport
 
 def start_server(mcp, transport: str) -> None:
+    """
+    Uruchamia serwer MCP. Dla SSE używamy wbudowanej metody mcp.run,
+    która sama zajmie się poprawnym wystawieniem aplikacji.
+    """
     if transport == "stdio":
         logger.info("Starting MCP server with STDIO transport...")
         mcp.run(transport="stdio")
 
     elif transport == "sse":
-        logger.info("Starting MCP server with SSE transport via HTTP...")
-        import uvicorn
-
         host = os.getenv("UVICORN_HOST", "0.0.0.0")
         port = int(os.getenv("UVICORN_PORT", "10000"))
 
-        # W wersji 1.25.0 aplikacja siedzi dokładnie tutaj:
-        app_to_run = mcp._app
-
-        logger.info(f"Starting MCP server with SSE transport at http://{host}:{port}/sse")
-
-        uvicorn.run(
-            app_to_run,
+        logger.info(f"Starting MCP server with SSE transport on {host}:{port}")
+        
+        # Wersja 1.25.0 najlepiej radzi sobie sama, gdy wywołamy run z transportem sse
+        mcp.run(
+            transport="sse",
             host=host,
-            port=port,
-            log_level="info"
+            port=port
         )
     else:
         raise ValueError(f"Unsupported transport: {transport}")
