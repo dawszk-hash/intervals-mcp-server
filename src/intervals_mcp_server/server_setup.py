@@ -3,6 +3,7 @@ import logging
 import uvicorn
 from starlette.applications import Starlette
 from starlette.requests import Request
+from starlette.responses import JSONResponse
 from starlette.routing import Route
 from mcp.server.sse import SseServerTransport
 
@@ -20,15 +21,28 @@ def start_server(mcp, transport: str) -> None:
     else:
         sse = SseServerTransport("/messages")
 
+        # 1. Obsługa Lobe Chat (Streamable HTTP / Fetch)
+        async def handle_lobe_manifest(request: Request):
+            """Lobe Chat szuka manifestu narzędzi przez POST na /"""
+            # Zwracamy listę narzędzi w formacie, którego oczekuje klient HTTP
+            return JSONResponse({
+                "mcpVersion": "1.0",
+                "capabilities": mcp.server.capabilities.dict(),
+                "tools": [
+                    {
+                        "name": name,
+                        "description": tool.description,
+                        "inputSchema": tool.input_schema
+                    } for name, tool in mcp.server.get_tools().items()
+                ]
+            })
+
+        # 2. Standardowy handler SSE (dla Claude/Gemini)
         async def handle_sse(request: Request):
-            """
-            Używamy obiektu Request i wyciągamy z niego surowe 
-            funkcje receive i send, których potrzebuje MCP.
-            """
             async with sse.connect_sse(
                 request.scope, 
                 request.receive, 
-                request._send # Używamy wewnętrznej funkcji send Starlette
+                request._send
             ) as (read_stream, write_stream):
                 await mcp.server.run(
                     read_stream,
@@ -37,7 +51,6 @@ def start_server(mcp, transport: str) -> None:
                 )
 
         async def handle_messages(request: Request):
-            """Obsługa komunikatów sterujących."""
             await sse.handle_post_message(
                 request.scope, 
                 request.receive, 
@@ -47,13 +60,13 @@ def start_server(mcp, transport: str) -> None:
         app = Starlette(
             debug=True,
             routes=[
+                # Endpoint dla Lobe Chat (obsługuje GET i POST na głównym adresie)
+                Route("/", endpoint=handle_lobe_manifest, methods=["GET", "POST"]),
+                # Endpointy dla standardowego SSE
                 Route("/sse", endpoint=handle_sse),
                 Route("/messages", endpoint=handle_messages, methods=["POST"]),
             ]
         )
 
-        logger.info(f"==> BOOTING FIXED DISPATCHER ON PORT {port} <==")
+        logger.info(f"==> BOOTING HYBRID SERVER (SSE + LOBE) ON PORT {port} <==")
         uvicorn.run(app, host="0.0.0.0", port=port, log_level="info")
-
-def setup_transport() -> str:
-    return get_transport()
