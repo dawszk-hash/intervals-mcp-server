@@ -16,28 +16,34 @@ def start_server(mcp, transport: str) -> None:
 
     elif transport == "sse":
         import uvicorn
-        from starlette.applications import Starlette
-
+        
         host = os.getenv("UVICORN_HOST", "0.0.0.0")
         port = int(os.getenv("UVICORN_PORT", "10000"))
 
         logger.info(f"Starting MCP server via Uvicorn on {host}:{port}")
 
-        # Wersja 1.25.0: mcp.run() jest ograniczone, więc wyciągamy aplikację Starlette
-        # Próbujemy najpierw oficjalnej metody tworzenia aplikacji
-        try:
+        # Próba uzyskania aplikacji Starlette z obiektu FastMCP
+        # W wersji 1.25.0 aplikacja zazwyczaj znajduje się pod jednym z tych atrybutów
+        app = None
+        for attr in ["starlette_app", "_app"]:
+            if hasattr(mcp, attr):
+                app = getattr(mcp, attr)
+                break
+        
+        # Jeśli nie znaleziono atrybutu, wywołujemy create_app()
+        if app is None and hasattr(mcp, "create_app"):
             app = mcp.create_app()
-        except AttributeError:
-            # Jeśli create_app nie istnieje, używamy wewnętrznego atrybutu
-            app = getattr(mcp, "_app", mcp)
+            
+        if app is None:
+            # Ostateczność: jeśli nic nie zadziała, używamy samego obiektu mcp
+            app = mcp
 
         uvicorn.run(
             app,
             host=host,
             port=port,
             log_level="info",
-            # Wyłączamy lifespan, jeśli biblioteka go nie wspiera (widoczne w logach)
-            lifespan="off"
+            lifespan="off"  # Ważne: zapobiega błędom protokołu ASGI przy starcie
         )
     else:
         raise ValueError(f"Unsupported transport: {transport}")
