@@ -1,8 +1,10 @@
 import os
 import logging
 import uvicorn
+import asyncio
 from starlette.applications import Starlette
 from starlette.routing import Route
+from starlette.endpoints import HTTPEndpoint
 from mcp.server.sse import SseServerTransport
 
 logger = logging.getLogger("intervals_icu_mcp_server")
@@ -17,34 +19,32 @@ def start_server(mcp, transport: str) -> None:
         logger.info("Starting MCP server via STDIO...")
         mcp.run(transport="stdio")
     else:
-        # Inicjalizacja transportu SSE
         sse = SseServerTransport("/messages")
 
-        async def handle_sse(scope, receive, send):
-            """Surowy handler ASGI dla strumienia SSE."""
-            try:
+        # Używamy klas, aby Starlette wiedziało dokładnie jak obsłużyć ASGI
+        class SSEEndpoint(HTTPEndpoint):
+            async def get(self, request):
+                scope = request.scope
+                receive = request.receive
+                send = request.send
+                
                 async with sse.connect_sse(scope, receive, send) as (read_stream, write_stream):
+                    logger.info("SSE Connection established.")
                     await mcp.server.run(
                         read_stream,
                         write_stream,
                         mcp.server.create_initialization_options()
                     )
-            except Exception as e:
-                logger.error(f"Error in SSE connection: {e}", exc_info=True)
 
-        async def handle_messages(scope, receive, send):
-            """Surowy handler ASGI dla przychodzących wiadomości POST."""
-            try:
-                await sse.handle_post_message(scope, receive, send)
-            except Exception as e:
-                logger.error(f"Error in message handler: {e}")
+        class MessagesEndpoint(HTTPEndpoint):
+            async def post(self, request):
+                await sse.handle_post_message(request.scope, request.receive, request.send)
 
-        # Budowa aplikacji Starlette z surowymi endpointami ASGI
         app = Starlette(
             debug=True,
             routes=[
-                Route("/sse", endpoint=handle_sse),
-                Route("/messages", endpoint=handle_messages, methods=["POST"]),
+                Route("/sse", endpoint=SSEEndpoint),
+                Route("/messages", endpoint=MessagesEndpoint),
             ]
         )
 
