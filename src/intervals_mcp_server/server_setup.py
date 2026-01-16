@@ -1,36 +1,23 @@
 import os
 import logging
 
-# Poprawione: getLogger zamiast get_logger
+# Używamy getLogger (poprawione)
 logger = logging.getLogger("intervals_icu_mcp_server")
 
 
 def get_transport() -> str:
     """
-    Parse MCP_TRANSPORT environment variable and validate it against
-    supported transport types.
-
-    Returns:
-        str: The selected transport type ("stdio" or "sse").
-
-    Raises:
-        ValueError: If the transport type is not supported.
+    Parse MCP_TRANSPORT environment variable and validate it.
     """
     transport = os.getenv("MCP_TRANSPORT", "stdio").lower()
-
     if transport not in ["stdio", "sse"]:
         raise ValueError(f"Unsupported transport type: {transport}")
-
     return transport
 
 
 def start_server(mcp, transport: str) -> None:
     """
     Start the MCP server with the selected transport.
-
-    Args:
-        mcp: The FastMCP instance to start.
-        transport: The transport type to use ("stdio" or "sse").
     """
     if transport == "stdio":
         logger.info("Starting MCP server with STDIO transport...")
@@ -40,16 +27,17 @@ def start_server(mcp, transport: str) -> None:
         logger.info("Starting MCP server with SSE transport via HTTP...")
         import uvicorn
 
-        # Set host and port from environment variables
+        # Pobieramy host i port z Environment Variables Rendera
         host = os.getenv("UVICORN_HOST", "0.0.0.0")
         port = int(os.getenv("UVICORN_PORT", "10000"))
 
         logger.info(
-            f"Starting MCP server with SSE transport at http://{host}:{port}/sse (messages: /messages/)."
+            f"Starting MCP server with SSE transport at http://{host}:{port}/sse"
         )
 
+        # W wersji 1.25.0 FastMCP aplikacja Starlette jest pod .starlette_app
         uvicorn.run(
-            mcp.create_app(),
+            mcp.starlette_app, 
             host=host,
             port=port,
             log_level="info"
@@ -61,6 +49,6 @@ def start_server(mcp, transport: str) -> None:
 
 def setup_transport() -> str:
     """
-    Get and validate the MCP_TRANSPORT environment variable, returning the selected transport.
+    Helper to setup transport type.
     """
     return get_transport()
