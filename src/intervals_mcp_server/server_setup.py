@@ -7,53 +7,41 @@ This module handles transport configuration and server startup logic.
 import os
 import logging
 
-from intervals_mcp_server.types import TransportOptions
-
 logger = logging.getLogger("intervals_icu_mcp_server")
 
 
-def get_transport() -> TransportOptions:
+def get_transport() -> str:
     """
     Parse MCP_TRANSPORT environment variable and validate it against
     supported transport types.
 
     Returns:
-        TransportOptions: The selected transport type.
+        str: The selected transport type ("stdio" or "sse").
 
     Raises:
         ValueError: If the transport type is not supported.
     """
-    transport_env = os.getenv("MCP_TRANSPORT", "stdio").lower()
+    transport = os.getenv("MCP_TRANSPORT", "stdio").lower()
     
-    # Create a dictionary mapping strings to TransportOptions values
-    transport_map = {
-        "stdio": TransportOptions.STDIO,
-        "sse": TransportOptions.SSE,
-    }
-    
-    # Look up the transport type
-    transport = transport_map.get(transport_env)
-    
-    if transport is None:
-        raise ValueError(f"Unsupported transport type: {transport_env}")
+    if transport not in ["stdio", "sse"]:
+        raise ValueError(f"Unsupported transport type: {transport}")
     
     return transport
 
 
-def start_server(mcp, transport: TransportOptions) -> None:
+def start_server(mcp, transport: str) -> None:
     """
     Start the MCP server with the selected transport.
 
     Args:
         mcp: The FastMCP instance to start.
-        transport: The transport type to use (STDIO or SSE).
+        transport: The transport type to use ("stdio" or "sse").
     """
-    # Run the server with STDIO transport or SSE via HTTP
-    if transport == TransportOptions.STDIO:
+    if transport == "stdio":
         logger.info("Starting MCP server with STDIO transport...")
         mcp.run(transport="stdio")
     
-    elif transport == TransportOptions.SSE:
+    elif transport == "sse":
         logger.info("Starting MCP server with SSE transport via HTTP...")
         import uvicorn
         
@@ -76,7 +64,7 @@ def start_server(mcp, transport: TransportOptions) -> None:
         raise ValueError(f"Unsupported transport: {transport}")
 
 
-def setup_transport() -> TransportOptions:
+def setup_transport() -> str:
     """
     Get and validate the MCP_TRANSPORT environment variable, returning the selected transport.
     """
