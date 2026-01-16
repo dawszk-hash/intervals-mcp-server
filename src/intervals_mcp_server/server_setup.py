@@ -1,7 +1,8 @@
 import os
 import logging
 
-logger = logging.get_logger("intervals_icu_mcp_server")
+# Poprawione: getLogger zamiast get_logger
+logger = logging.getLogger("intervals_icu_mcp_server")
 
 
 def get_transport() -> str:
@@ -40,15 +41,15 @@ def start_server(mcp, transport: str) -> None:
         import uvicorn
 
         # Set host and port from environment variables
-        host = os.getenv("UVICORN_HOST", "127.0.0.1")
-        port = int(os.getenv("UVICORN_PORT", "8000"))
+        host = os.getenv("UVICORN_HOST", "0.0.0.0")
+        port = int(os.getenv("UVICORN_PORT", "10000"))
 
         logger.info(
             f"Starting MCP server with SSE transport at http://{host}:{port}/sse (messages: /messages/)."
         )
 
         uvicorn.run(
-            mcp.create_app(), # Zmienione z mcp.app na mcp.create_app()
+            mcp.create_app(),
             host=host,
             port=port,
             log_level="info"
