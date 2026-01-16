@@ -21,23 +21,13 @@ def start_server(mcp, transport: str) -> None:
         host = os.getenv("UVICORN_HOST", "0.0.0.0")
         port = int(os.getenv("UVICORN_PORT", "10000"))
 
-        # Próbujemy znaleźć aplikację w różnych miejscach, w zależności od wersji biblioteki
-        app = None
-        if hasattr(mcp, "starlette_app"):
-            app = mcp.starlette_app
-        elif hasattr(mcp, "_app"):
-            app = mcp._app
-        elif hasattr(mcp, "create_app"):
-            app = mcp.create_app()
-        
-        if app is None:
-            # Jeśli nic nie zadziałało, używamy mcp jako fallback
-            app = mcp
+        # W wersji 1.25.0 aplikacja siedzi dokładnie tutaj:
+        app_to_run = mcp._app
 
         logger.info(f"Starting MCP server with SSE transport at http://{host}:{port}/sse")
 
         uvicorn.run(
-            app,
+            app_to_run,
             host=host,
             port=port,
             log_level="info"
