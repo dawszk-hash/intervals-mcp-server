@@ -7,7 +7,6 @@ This module handles transport configuration and server startup logic.
 import os
 import logging
 
-from mcp.server.stdio import StdioServerParameters
 from intervals_mcp_server.types import TransportOptions
 
 logger = logging.getLogger("intervals_icu_mcp_server")
