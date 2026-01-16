@@ -1,13 +1,7 @@
-"""
-Server setup and initialization for intervals-icu MCP server.
-
-This module handles transport configuration and server startup logic.
-"""
-
 import os
 import logging
 
-logger = logging.getLogger("intervals_icu_mcp_server")
+logger = logging.get_logger("intervals_icu_mcp_server")
 
 
 def get_transport() -> str:
@@ -22,10 +16,10 @@ def get_transport() -> str:
         ValueError: If the transport type is not supported.
     """
     transport = os.getenv("MCP_TRANSPORT", "stdio").lower()
-    
+
     if transport not in ["stdio", "sse"]:
         raise ValueError(f"Unsupported transport type: {transport}")
-    
+
     return transport
 
 
@@ -40,26 +34,26 @@ def start_server(mcp, transport: str) -> None:
     if transport == "stdio":
         logger.info("Starting MCP server with STDIO transport...")
         mcp.run(transport="stdio")
-    
+
     elif transport == "sse":
         logger.info("Starting MCP server with SSE transport via HTTP...")
         import uvicorn
-        
-        # Get host and port from environment variables
+
+        # Set host and port from environment variables
         host = os.getenv("UVICORN_HOST", "127.0.0.1")
         port = int(os.getenv("UVICORN_PORT", "8000"))
-        
+
         logger.info(
             f"Starting MCP server with SSE transport at http://{host}:{port}/sse (messages: /messages/)."
         )
-        
+
         uvicorn.run(
-            mcp.app,
+            mcp.create_app(), # Zmienione z mcp.app na mcp.create_app()
             host=host,
             port=port,
             log_level="info"
         )
-    
+
     else:
         raise ValueError(f"Unsupported transport: {transport}")
 
